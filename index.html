@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PeopleFlow</title>
+  <style>
+    :root {
+      --bg: #f3f7fb;
+      --surface: #ffffff;
+      --ink: #12202e;
+      --muted: #5c6b7a;
+      --line: #e4e9ee;
+      --primary: #0b6e99;
+      --primary-soft: #e7f4fa;
+      --good: #0f7a4d;
+      --good-soft: #e6f6ee;
+      --warn: #9a5b12;
+      --warn-soft: #fbf1e3;
+      --bad: #b4233a;
+      --bad-soft: #fdecee;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 12%, #d5eef8 0 18%, transparent 19%),
+        radial-gradient(circle at 92% 8%, #d9f3e6 0 14%, transparent 15%),
+        radial-gradient(circle at 78% 88%, #e7eefc 0 16%, transparent 17%),
+        linear-gradient(165deg, #f7fbfd 0%, #eef3f8 100%);
+    }
+    body::before, body::after {
+      content: "";
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      inset: -10%;
+      background:
+        linear-gradient(118deg, transparent 42%, rgba(11, 110, 153, 0.07) 42.4%, transparent 43%),
+        linear-gradient(28deg, transparent 62%, rgba(15, 122, 77, 0.06) 62.5%, transparent 63%);
+      animation: drift 28s linear infinite;
+    }
+    body::after {
+      inset: 0;
+      background-image: radial-gradient(rgba(11, 110, 153, 0.16) 1.1px, transparent 1.2px);
+      background-size: 22px 22px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 78%);
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; }
+    #app { position: relative; z-index: 1; height: 100%; }
+    .shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+    aside, header, .card, .modal {
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 10px 30px rgba(18, 32, 46, 0.04);
+    }
+    aside {
+      display: flex;
+      flex-direction: column;
+      max-height: 42vh;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+    .brand { display: flex; gap: 12px; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .logo, .avatar {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--primary); color: white; font-weight: 700; border-radius: 10px; flex: none;
+    }
+    .logo { width: 36px; height: 36px; font-size: 13px; }
+    .avatar { width: 36px; height: 36px; font-size: 12px; }
+    .avatar.lg { width: 64px; height: 64px; border-radius: 16px; font-size: 20px; }
+    .sub { color: var(--muted); font-size: 12px; }
+    .search-wrap { padding: 12px 16px; }
+    .search-wrap input, .field, .modal input, .modal select {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
+      padding: 8px 12px; outline: none;
+    }
+    .search-wrap input:focus, .field:focus, .modal input:focus { border-color: var(--primary); background: white; }
+    .list-head, .row-foot, .toolbar, .spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .list-head { padding: 4px 20px 8px; }
+    .kicker { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .count { background: var(--bg); border-radius: 999px; padding: 2px 8px; font-size: 12px; color: var(--muted); }
+    nav { overflow: auto; padding: 0 8px 8px; flex: 1; }
+    .person, .emp-card, .ghost, .primary, .danger, .menu button {
+      border: 0; background: transparent; text-align: left;
+    }
+    .person {
+      display: flex; width: 100%; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 10px; margin-bottom: 2px;
+      transition: transform 160ms ease, background 160ms ease;
+    }
+    .person:hover, .emp-card:hover { transform: translateY(-2px); }
+    .person.active, .person:hover { background: var(--primary-soft); }
+    .person .meta, .grow { min-width: 0; flex: 1; }
+    .name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pct.good { color: var(--good); }
+    .pct.bad { color: var(--bad); }
+    .pct.mid { color: var(--muted); }
+    .side-foot { border-top: 1px solid var(--line); padding: 12px; }
+    .primary, .danger, .ghost {
+      border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600;
+    }
+    .primary { background: var(--primary); color: white; }
+    .primary:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(11, 110, 153, 0.28); }
+    .danger { background: var(--bad); color: white; }
+    .ghost { background: var(--bg); color: var(--ink); }
+    .wide { width: 100%; }
+    main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 24px; background: rgba(255, 255, 255, 0.9); border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+    h1 { font-size: 18px; margin: 0; }
+    .today { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+    .content { overflow: auto; padding: 24px; flex: 1; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+    .card .num { font-size: 28px; font-weight: 800; margin-top: 4px; }
+    .grid { display: grid; gap: 16px; }
+    .emp-card { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 18px; width: 100%; transition: transform 160ms ease, border-color 160ms ease; }
+    .emp-card:hover { border-color: var(--primary); }
+    .badge { border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .b-good { background: var(--good-soft); color: var(--good); }
+    .b-bad { background: var(--bad-soft); color: var(--bad); }
+    .b-mid { background: var(--primary-soft); color: var(--primary); }
+    .bar { height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1); }
+    .back { background: none; border: 0; color: var(--primary); font-weight: 600; padding: 0 0 14px; }
+    .hero { background: linear-gradient(120deg, #e7f4fa, #f4fbf7 70%); padding: 20px 24px; display: flex; justify-content: space-between; gap: 16px; }
+    .who { display: flex; gap: 16px; align-items: center; }
+    .pill { background: white; border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 600; }
+    .pad { padding: 8px 24px 24px; }
+    .toolbar { margin: 8px 0 14px; }
+    .unlocked { color: var(--good); font-size: 12px; font-weight: 700; }
+    .colhead, .row-grid { display: none; }
+    .work {
+      border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; background: white;
+    }
+    .work.locked { background: var(--bg); }
+    .stack { display: grid; gap: 8px; }
+    .field-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .inline { display: flex; gap: 6px; }
+    .lock-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 700; }
+    .link { background: none; border: 0; color: var(--primary); font-weight: 600; padding: 0; }
+    .menu { position: relative; }
+    .menu-pop {
+      position: absolute; right: 0; z-index: 5; margin-top: 4px; width: 160px;
+      background: white; border: 1px solid var(--line); border-radius: 12px; padding: 4px;
+      box-shadow: 0 12px 30px rgba(18, 32, 46, 0.12);
+    }
+    .menu-pop button { display: block; width: 100%; border-radius: 8px; padding: 8px 10px; }
+    .menu-pop button:hover:not(:disabled) { background: var(--bg); }
+    .menu-pop button:disabled { opacity: 0.4; }
+    .hours { display: grid; gap: 12px; margin-top: 8px; }
+    .hours .card { background: var(--bg); }
+    .over { color: var(--bad); font-weight: 700; }
+    .modal-back {
+      position: fixed; inset: 0; z-index: 20; background: rgba(18, 32, 46, 0.4);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal {
+      width: min(440px, 100%); background: white; border-radius: 18px; padding: 24px;
+      max-height: 80vh; overflow: auto; animation: rise 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .modal h3 { margin: 0; text-align: center; }
+    .modal .lead { text-align: center; color: var(--muted); font-size: 14px; }
+    .modal label { display: block; margin-top: 12px; font-size: 12px; color: var(--muted); font-weight: 700; }
+    .modal label input { margin-top: 4px; background: white; }
+    .err { color: var(--bad); font-size: 12px; }
+    .actions { display: flex; gap: 10px; margin-top: 16px; }
+    .actions button { flex: 1; }
+    .hint { text-align: center; color: var(--muted); font-size: 12px; }
+    code { background: var(--bg); border-radius: 6px; padding: 2px 6px; }
+    .log-item { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-size: 14px; }
+    @media (min-width: 800px) {
+      .shell { flex-direction: row; }
+      aside { width: 288px; max-height: none; border-bottom: 0; border-right: 1px solid var(--line); }
+      .stats { grid-template-columns: repeat(4, 1fr); }
+      .grid { grid-template-columns: 1fr 1fr; }
+      .hours { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    @media (min-width: 1100px) {
+      .grid { grid-template-columns: 1fr 1fr 1fr; }
+      .colhead { display: grid; grid-template-columns: 1.2fr 1.7fr 1.3fr .7fr .7fr 1.15fr auto; gap: 8px; padding: 0 12px 8px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+      .row-grid { display: grid; grid-template-columns: 1.2fr 1.7fr 1.3fr .7fr .7fr 1.15fr auto; gap: 8px; align-items: center; }
+      .field-label { display: none; }
+    }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+    @keyframes drift { from { transform: translate3d(0,0,0); } to { transform: translate3d(-4%, -3%, 0); } }
+    @media (prefers-reduced-motion: reduce) {
+      body::before, .modal, .bar > span, .person, .emp-card, .primary { animation: none; transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const EMPLOYEE_PASSWORD = "demo123";
+    const LOCK_PASSWORD = "Emaz";
+    const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const EMP_KEY = "peopleflow.employees.v2";
+    const LOG_KEY = "peopleflow.changelog.v1";
+    const DUES = [
+      ["GST", [
+        ["10 Oct 2026", "GSTR-7 and GSTR-8 for September 2026"],
+        ["11 Oct 2026", "GSTR-1 for September 2026, monthly filers"],
+        ["13 Oct 2026", "GSTR-1 for Jul–Sep 2026, QRMP filers. GSTR-6 for September"],
+        ["18 Oct 2026", "CMP-08 for Jul–Sep 2026, composition dealers"],
+        ["20 Oct 2026", "GSTR-3B for September 2026, monthly filers"],
+        ["22 or 24 Oct 2026", "GSTR-3B for Jul–Sep 2026, QRMP filers. The date depends on the state"]
+      ]],
+      ["Income tax return", [["21 Nov 2026", "ITR for AY 2026-27 in the extended audit category. The earlier date was 31 Oct 2026"]]],
+      ["Audit", [["21 Oct 2026", "Specified tax audit report for AY 2026-27. Extended from 30 Sep 2026"]]]
+    ];
+
+    function row(id, week, day, description, percent, hoursRequired, hoursTaken, deadline) {
+      return { id, week, day, description, percent, hoursRequired, hoursTaken, deadline: deadline || "", locked: false };
+    }
+    function seed() {
+      return [
+        { id: "e1", name: "Aarav Sharma", role: "Frontend Developer", dept: "Engineering", initials: "AS", rows: [row("r1","12","Mon","Dashboard UI redesign",90,16,14,"2026-10-18"), row("r2","12","Wed","Component library update",65,12,8,"2026-10-22"), row("r3","12","Fri","Accessibility audit",40,8,3,"2026-10-25")] },
+        { id: "e2", name: "Priya Patel", role: "Product Designer", dept: "Design", initials: "PP", rows: [row("r4","12","Tue","Mobile app wireframes",100,20,18,"2026-10-15"), row("r5","12","Thu","Design system tokens",85,10,9,"2026-10-20")] },
+        { id: "e3", name: "Rohan Mehta", role: "Backend Engineer", dept: "Engineering", initials: "RM", rows: [row("r6","11","Mon","API rate limiting",60,14,12,"2026-10-17"), row("r7","12","Thu","Database migration",30,18,6,"2026-10-28")] },
+        { id: "e4", name: "Sneha Reddy", role: "HR Specialist", dept: "People Ops", initials: "SR", rows: [row("r8","12","Mon","Q3 performance reviews",95,12,11,"2026-10-16"), row("r9","12","Wed","Onboarding docs update",80,8,6,"2026-10-21")] },
+        { id: "e5", name: "Vikram Singh", role: "DevOps Engineer", dept: "Engineering", initials: "VS", rows: [row("r10","12","Tue","CI/CD pipeline upgrade",55,20,11,"2026-10-24")] },
+        { id: "e6", name: "Ananya Gupta", role: "Marketing Lead", dept: "Growth", initials: "AG", rows: [row("r11","12","Fri","Campaign launch assets",81,15,12,"2026-10-19")] },
+        { id: "e7", name: "Karan Joshi", role: "QA Engineer", dept: "Engineering", initials: "KJ", rows: [row("r12","12","Wed","Regression test suite",70,16,12,"2026-10-23")] },
+        { id: "e8", name: "Meera Iyer", role: "Data Analyst", dept: "Analytics", initials: "MI", rows: [row("r13","12","Mon","Weekly metrics report",63,10,7,"2026-10-14")] }
+      ];
+    }
+    function loadEmployees() {
+      try {
+        const raw = localStorage.getItem(EMP_KEY);
+        if (!raw) return seed();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return seed();
+        return parsed.map((e) => ({ ...e, rows: (e.rows || []).map((r) => ({ ...r, deadline: r.deadline || "", locked: !!r.locked })) }));
+      } catch { return seed(); }
+    }
+    function loadLog() {
+      try {
+        const raw = localStorage.getItem(LOG_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.slice(0, 150) : [];
+      } catch { return []; }
+    }
+
+    let employees = loadEmployees();
+    let logs = loadLog();
+    let selectedId = null;
+    let query = "";
+    let editing = false;
+    let editingRowId = null;
+    let menuRowId = null;
+    let modal = null;
+    let password = "";
+    let passwordError = "";
+    let showDues = false;
+    let adding = false;
+    let draft = { name: "", role: "", dept: "" };
+    let addError = "";
+    let logRowId = null;
+    let saveTimer = 0;
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "\u0026amp;",
+      "<": "\u0026lt;",
+      ">": "\u0026gt;",
+      '"': "\u0026quot;",
+      "'": "\u0026#39;"
+    }[c]));
+    const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Math.random().toString(36).slice(2));
+    const selected = () => employees.find((e) => e.id === selectedId) || null;
+    const avg = (e) => e.rows.length ? Math.round(e.rows.reduce((s, r) => s + Number(r.percent || 0), 0) / e.rows.length) : 0;
+    const tone = (n) => n >= 80 ? "Ahead" : n < 50 ? "Behind" : "On track";
+    const toneClass = (n) => n >= 80 ? "b-good" : n < 50 ? "b-bad" : "b-mid";
+    const pctClass = (n) => n >= 80 ? "good" : n < 50 ? "bad" : "mid";
+    function hoursOf(e) {
+      let taken = 0, required = 0, lockedTaken = 0;
+      e.rows.forEach((r) => { taken += Number(r.hoursTaken) || 0; required += Number(r.hoursRequired) || 0; if (r.locked) lockedTaken += Number(r.hoursTaken) || 0; });
+      return { taken, required, lockedTaken, openTaken: taken - lockedTaken };
+    }
+    function overdue(r) { return !!(r.deadline && r.percent < 100 && new Date(r.deadline + "T23:59:59").getTime() < Date.now()); }
+    function initials(name) {
+      const parts = name.trim().split(/\s+/).filter(Boolean);
+      return ((parts[0]?.[0] || "") + (parts[1]?.[0] || parts[0]?.[1] || "")).toUpperCase() || "NA";
+    }
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        localStorage.setItem(EMP_KEY, JSON.stringify(employees));
+        localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0, 150)));
+      }, 250);
+    }
+    function pushLog(entry) {
+      const now = Date.now();
+      const head = logs[0];
+      if (head && head.employeeId === entry.employeeId && head.rowId === entry.rowId && head.field === entry.field && now - head.at < 1200) {
+        if (head.to === entry.to) return;
+        head.to = entry.to; head.at = now; head.rowLabel = entry.rowLabel;
+        return;
+      }
+      logs.unshift({ id: uid(), at: now, ...entry });
+      if (logs.length > 150) logs.length = 150;
+    }
+    function blankRow() { return { id: uid(), week: "12", day: "Mon", description: "", percent: 0, hoursRequired: 0, hoursTaken: 0, deadline: "", locked: false }; }
+
+    function view() {
+      const emp = selected();
+      const filtered = employees.filter((e) => (e.name + e.role + e.dept).toLowerCase().includes(query.trim().toLowerCase()));
+      const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      return `<div class="shell">
+        <aside>
+          <div class="brand"><div class="logo">PF</div><div><div class="name">PeopleFlow</div><div class="sub">HR management</div></div></div>
+          <div class="search-wrap"><input id="search" placeholder="Search employees" value="${esc(query)}"></div>
+          <div class="list-head"><span class="kicker">Employees</span><span class="count">${filtered.length}</span></div>
+          <nav>${filtered.map((e) => {
+            const n = avg(e);
+            return `<button class="person ${e.id === selectedId ? "active" : ""}" data-action="open" data-id="${esc(e.id)}">
+              <span class="avatar">${esc(e.initials)}</span>
+              <span class="meta"><span class="name">${esc(e.name)}</span><span class="sub">${esc(e.role)}</span></span>
+              <span class="pct ${pctClass(n)}">${n}%</span>
+            </button>`;
+          }).join("")}</nav>
+          <div class="side-foot"><button class="primary wide" data-action="add-open">+ Add employee</button></div>
+        </aside>
+        <main>
+          <header>
+            <div>
+              <h1>${emp ? esc(emp.name) : "Team overview"}</h1>
+              <div class="sub">${emp ? (editing ? "Edit mode unlocked · rows lock individually" : "Read only · enter password to update") : "All employees · read only"}</div>
+            </div>
+            <div class="spread">
+              <div class="today"><div class="sub">Today</div><strong>${esc(today)}</strong></div>
+              <button class="primary" data-action="dues">Due dates / Important instruction</button>
+            </div>
+          </header>
+          <div class="content">${emp ? detail(emp) : overview()}</div>
+        </main>
+      </div>${modal ? passwordModal() : ""}${showDues ? duesModal() : ""}${adding ? addModal() : ""}${logRowId ? logModal() : ""}`;
+    }
+
+    function overview() {
+      const avgs = employees.map(avg);
+      const mean = avgs.length ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length) : 0;
+      const tasks = employees.reduce((n, e) => n + e.rows.length, 0);
+      const behind = avgs.filter((n) => n < 50).length;
+      const cards = [["Employees", employees.length], ["Avg progress", mean + "%"], ["Work rows", tasks], ["Need attention", behind]];
+      return `<div class="stats">${cards.map(([k, v]) => `<div class="card"><div class="kicker">${k}</div><div class="num">${v}</div></div>`).join("")}</div>
+        <h2 style="font-size:14px;margin:0 0 12px">Employee progress</h2>
+        <div class="grid">${employees.map((e) => {
+          const n = avg(e);
+          return `<button class="emp-card" data-action="open" data-id="${esc(e.id)}">
+            <div class="spread" style="margin-bottom:14px">
+              <div class="who"><span class="avatar">${esc(e.initials)}</span><span><span class="name">${esc(e.name)}</span><span class="sub">${esc(e.role)}</span></span></div>
+              <span class="badge ${toneClass(n)}">${tone(n)}</span>
+            </div>
+            <div class="spread"><span class="sub">Progress</span><strong>${n}%</strong></div>
+            <div class="bar"><span style="width:${n}%"></span></div>
+            <div class="spread" style="margin-top:10px"><span class="sub">${esc(e.dept)}</span><span class="sub">${e.rows.length} rows</span></div>
+          </button>`;
+        }).join("") || `<p class="sub">No employees yet. Use Add employee.</p>`}</div>`;
+    }
+
+    function detail(e) {
+      const n = avg(e);
+      const h = hoursOf(e);
+      return `<button class="back" data-action="back">← Back to overview</button>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="hero">
+            <div class="who"><span class="avatar lg">${esc(e.initials)}</span>
+              <div><h2 style="margin:0">${esc(e.name)}</h2><div class="sub">${esc(e.role)}</div>
+              <div style="margin-top:8px"><span class="pill">${tone(n)}</span> <span class="sub">${esc(e.dept)}</span></div></div>
+            </div>
+            <div style="text-align:right">
+              <div class="sub">Overall progress</div><div style="font-size:32px;font-weight:800">${n}%</div>
+              <button class="ghost" style="margin-top:8px;color:var(--bad);border:1px solid #f3c3cb" data-action="delete-open">Delete employee</button>
+            </div>
+          </div>
+          <div class="pad">
+            <div class="bar" style="height:10px;margin-bottom:16px"><span style="width:${n}%"></span></div>
+            <div class="toolbar">
+              <strong>Work log</strong>
+              <div class="spread">${editing ? `<span class="unlocked">Edit unlocked</span>
+                <button class="primary" data-action="add-row">+ Add row</button>
+                <button class="ghost" data-action="lock-session">Lock session</button>`
+                : `<button class="primary" data-action="edit-open">Update progress</button>`}
+              </div>
+            </div>
+            <div class="colhead"><span>Week + day</span><span>Task</span><span>% complete</span><span>Hrs req.</span><span>Hrs taken</span><span>Deadline</span><span></span></div>
+            ${e.rows.map((r) => workRow(e, r)).join("") || `<p class="sub">No rows yet.</p>`}
+            <div class="hours">
+              <div class="card"><div class="sub">Hours worked, all days</div><strong>${h.taken} h</strong><div class="sub">Combined hours taken</div></div>
+              <div class="card"><div class="sub">Locked hours</div><strong>${h.lockedTaken} h</strong><div class="sub">Frozen until an admin unlocks the row</div></div>
+              <div class="card"><div class="sub">Still editable</div><strong>${h.openTaken} h</strong><div class="sub">Required across rows: ${h.required} h</div></div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function workRow(e, r) {
+      const open = editing && editingRowId === r.id && !r.locked;
+      const count = logs.filter((x) => x.employeeId === e.id && x.rowId === r.id).length;
+      const week = open
+        ? `<div class="inline"><input class="field" id="w-${r.id}" data-row="${r.id}" data-field="week" value="${esc(r.week)}" style="width:64px"><select class="field" id="d-${r.id}" data-row="${r.id}" data-field="day">${DAYS.map((d) => `<option ${d === r.day ? "selected" : ""}>${d}</option>`).join("")}</select></div>`
+        : `<strong>W${esc(r.week)} · ${esc(r.day)}</strong>`;
+      const task = open
+        ? `<input class="field" id="t-${r.id}" data-row="${r.id}" data-field="description" value="${esc(r.description)}" placeholder="What was worked on">`
+        : `<div class="name">${esc(r.description || "—")}</div>`;
+      const percent = open
+        ? `<div class="inline"><input id="p-${r.id}" data-row="${r.id}" data-field="percent" data-kind="num" type="range" min="0" max="100" value="${Number(r.percent)}" style="flex:1"><strong>${r.percent}%</strong></div>`
+        : `<strong>${r.percent}%</strong>`;
+      const req = open ? `<input class="field" id="rq-${r.id}" data-row="${r.id}" data-field="hoursRequired" data-kind="num" type="number" min="0" value="${Number(r.hoursRequired)}">` : `${r.hoursRequired}`;
+      const taken = open ? `<input class="field" id="tk-${r.id}" data-row="${r.id}" data-field="hoursTaken" data-kind="num" type="number" min="0" value="${Number(r.hoursTaken)}">` : `${r.hoursTaken}`;
+      const deadline = open
+        ? `<input class="field" id="dl-${r.id}" data-row="${r.id}" data-field="deadline" type="date" value="${esc(r.deadline)}">`
+        : `<span class="${overdue(r) ? "over" : ""}">${esc(r.deadline || "—")}${overdue(r) ? " · overdue" : ""}</span>`;
+      return `<div class="work ${r.locked ? "locked" : ""}">
+        <div class="stack row-grid">
+          <div><div class="field-label">Week + day</div>${week}</div>
+          <div><div class="field-label">Task description</div>${task}</div>
+          <div><div class="field-label">% complete</div>${percent}</div>
+          <div><div class="field-label">Hrs req.</div>${req}</div>
+          <div><div class="field-label">Hrs taken</div>${taken}</div>
+          <div><div class="field-label">Deadline</div>${deadline}</div>
+          <div class="menu">${editing ? `<button class="ghost" data-action="menu" data-id="${r.id}">Edit</button>` : ""}
+            ${menuRowId === r.id ? `<div class="menu-pop">
+              <button data-action="edit-row" data-id="${r.id}" ${r.locked ? "disabled" : ""}>Edit fields</button>
+              <button data-action="lock-open" data-id="${r.id}">${r.locked ? "Unlock row" : "Lock field"}</button>
+            </div>` : ""}
+          </div>
+        </div>
+        <div class="row-foot" style="margin-top:8px">${r.locked ? `<span class="lock-tag">Locked</span>` : `<span></span>`}
+          <button class="link" data-action="log" data-id="${r.id}">Row log${count ? " · " + count : ""}</button>
+        </div>
+      </div>`;
+    }
+
+    function passwordModal() {
+      const del = modal.kind === "delete";
+      const edit = modal.kind === "employee";
+      const title = edit ? "Enter password to edit" : del ? "Delete this employee" : "Admin lock password";
+      const lead = edit ? "Without it you can only read this employee." : del ? `This removes ${esc(selected()?.name || "this employee")} and their work rows. It cannot be undone.` : "This locks or unlocks the selected row. Other rows stay as they are.";
+      return `<div class="modal-back"><form class="modal" data-action="pw-ok">
+        <h3>${title}</h3><p class="lead">${lead}</p>
+        <input id="pw" type="password" placeholder="Password" value="${esc(password)}" style="margin-top:14px">
+        ${passwordError ? `<p class="err">${esc(passwordError)}</p>` : ""}
+        <div class="actions"><button type="button" class="ghost" data-action="close-modal">Cancel</button><button class="${del ? "danger" : "primary"}" type="submit">${del ? "Delete" : "Confirm"}</button></div>
+        <p class="hint">${edit ? `Employee password <code>${EMPLOYEE_PASSWORD}</code>` : `Admin password <code>${LOCK_PASSWORD}</code>`}</p>
+      </form></div>`;
+    }
+    function addModal() {
+      return `<div class="modal-back"><form class="modal" data-action="add-save" style="text-align:left">
+        <h3 style="text-align:left">Add employee</h3>
+        <p class="sub">They appear in the list and on the overview. Work starts as one empty row.</p>
+        <label>Name<input id="add-name" value="${esc(draft.name)}" placeholder="Full name"></label>
+        <label>Role<input id="add-role" value="${esc(draft.role)}" placeholder="Frontend Developer"></label>
+        <label>Department<input id="add-dept" value="${esc(draft.dept)}" placeholder="Engineering"></label>
+        ${addError ? `<p class="err">${esc(addError)}</p>` : ""}
+        <div class="actions"><button type="button" class="ghost" data-action="add-close">Cancel</button><button class="primary" type="submit">Add</button></div>
+      </form></div>`;
+    }
+    function duesModal() {
+      return `<div class="modal-back"><div class="modal" style="text-align:left">
+        <h3 style="text-align:left">Due dates / Important instruction</h3>
+        <p class="sub">October 2026 snapshot. The audit report and the matching return follow CBDT Circular No. 07/2026 dated 28 Sep 2026. Confirm on the GST portal and the income-tax portal before you file.</p>
+        ${DUES.map(([title, items]) => `<h4>${title}</h4>${items.map(([d, t]) => `<div class="log-item"><strong>${esc(d)}</strong><div class="sub">${esc(t)}</div></div>`).join("")}`).join("")}
+        <button class="primary wide" style="margin-top:16px" data-action="dues-close">Close</button>
+      </div></div>`;
+    }
+    function logModal() {
+      const emp = selected();
+      const r = emp && emp.rows.find((x) => x.id === logRowId);
+      if (!r) return "";
+      const entries = logs.filter((x) => x.employeeId === emp.id && x.rowId === r.id);
+      const groups = [];
+      entries.forEach((entry) => {
+        const day = new Date(entry.at).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+        const last = groups[groups.length - 1];
+        if (last && last.day === day) last.items.push(entry); else groups.push({ day, items: [entry] });
+      });
+      return `<div class="modal-back"><div class="modal" style="text-align:left">
+        <h3 style="text-align:left">Row log</h3>
+        <p class="sub">${esc(r.description || "Untitled")} · W${esc(r.week)} ${esc(r.day)}</p>
+        ${groups.length ? groups.map((g) => `<h4 class="kicker">${esc(g.day)}</h4>${g.items.map((entry) => `<div class="log-item"><div class="spread"><strong>${esc(entry.field)}</strong><span class="sub">${esc(new Date(entry.at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }))}</span></div><div class="sub">${esc(entry.from || "—")} → ${esc(entry.to || "—")}</div></div>`).join("")}`).join("") : `<p class="sub">No changes on this row yet.</p>`}
+        <button class="ghost wide" style="margin-top:16px" data-action="log-close">Close</button>
+      </div></div>`;
+    }
+
+    function render() {
+      const prev = document.activeElement;
+      const focusId = prev && prev.id;
+      const start = prev && prev.selectionStart;
+      const end = prev && prev.selectionEnd;
+      document.getElementById("app").innerHTML = view();
+      if (!focusId) return;
+      const el = document.getElementById(focusId);
+      if (!el) return;
+      el.focus();
+      if (typeof start === "number" && el.setSelectionRange) { try { el.setSelectionRange(start, end); } catch (e) {} }
+    }
+
+    function updateRow(rowId, patch) {
+      const emp = selected();
+      if (!emp) return;
+      const current = emp.rows.find((r) => r.id === rowId);
+      if (!current || current.locked) return;
+      [["week", "Week"], ["day", "Day"], ["description", "Task"], ["percent", "% complete"], ["hoursRequired", "Hours required"], ["hoursTaken", "Hours taken"], ["deadline", "Deadline"]].forEach(([key, label]) => {
+        if (patch[key] === undefined) return;
+        const from = String(current[key] ?? "");
+        current[key] = patch[key];
+        pushLog({ employeeId: emp.id, employeeName: emp.name, rowId: current.id, rowLabel: `W${current.week} ${current.day}`, field: label, from, to: String(current[key] ?? "") });
+      });
+      scheduleSave();
+      render();
+    }
+
+    function submitPassword() {
+      if (!modal) return;
+      if (modal.kind === "employee") {
+        if (password !== EMPLOYEE_PASSWORD) { passwordError = "Incorrect password."; render(); return; }
+        editing = true; modal = null; password = ""; passwordError = ""; render(); return;
+      }
+      if (password !== LOCK_PASSWORD) { passwordError = "Incorrect admin password."; render(); return; }
+      if (modal.kind === "delete") {
+        const id = selectedId;
+        employees = employees.filter((e) => e.id !== id);
+        logs = logs.filter((entry) => entry.employeeId !== id);
+        selectedId = null; editing = false; editingRowId = null; menuRowId = null;
+      } else {
+        const emp = selected();
+        const target = emp && emp.rows.find((r) => r.id === modal.rowId);
+        if (emp && target) {
+          pushLog({ employeeId: emp.id, employeeName: emp.name, rowId: target.id, rowLabel: `W${target.week} ${target.day}`, field: "Lock", from: target.locked ? "Locked" : "Open", to: target.locked ? "Open" : "Locked" });
+          target.locked = !target.locked;
+          if (editingRowId === target.id) editingRowId = null;
+        }
+      }
+      modal = null; password = ""; passwordError = ""; menuRowId = null; scheduleSave(); render();
+    }
+
+    document.getElementById("app").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) {
+        if (menuRowId) { menuRowId = null; render(); }
+        return;
+      }
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === "open") { selectedId = id; editing = false; editingRowId = null; menuRowId = null; logRowId = null; }
+      else if (action === "back") { selectedId = null; editing = false; editingRowId = null; menuRowId = null; logRowId = null; }
+      else if (action === "add-open") { draft = { name: "", role: "", dept: "" }; addError = ""; adding = true; }
+      else if (action === "add-close") adding = false;
+      else if (action === "dues") showDues = true;
+      else if (action === "dues-close") showDues = false;
+      else if (action === "edit-open") { password = ""; passwordError = ""; modal = { kind: "employee" }; }
+      else if (action === "delete-open") { password = ""; passwordError = ""; modal = { kind: "delete" }; }
+      else if (action === "close-modal") { modal = null; password = ""; passwordError = ""; }
+      else if (action === "lock-session") { editing = false; editingRowId = null; menuRowId = null; }
+      else if (action === "add-row") {
+        const emp = selected();
+        if (!emp || !editing) return;
+        const made = blankRow();
+        emp.rows.push(made);
+        pushLog({ employeeId: emp.id, employeeName: emp.name, rowId: made.id, rowLabel: `W${made.week} ${made.day}`, field: "Row", from: "—", to: "Added" });
+        editingRowId = made.id; menuRowId = null; scheduleSave();
+      } else if (action === "menu") menuRowId = menuRowId === id ? null : id;
+      else if (action === "edit-row") {
+        const rowItem = selected()?.rows.find((r) => r.id === id);
+        if (!rowItem || rowItem.locked) return;
+        editingRowId = id; menuRowId = null;
+      } else if (action === "lock-open") { password = ""; passwordError = ""; modal = { kind: "lock", rowId: id }; menuRowId = null; }
+      else if (action === "log") logRowId = id;
+      else if (action === "log-close") logRowId = null;
+      else return;
+      render();
+    });
+
+    document.getElementById("app").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const action = e.target.dataset.action;
+      if (action === "pw-ok") submitPassword();
+      if (action === "add-save") {
+        const name = draft.name.trim();
+        if (!name) { addError = "Enter a name."; render(); return; }
+        const made = blankRow();
+        const employee = { id: uid(), name, role: draft.role.trim() || "Employee", dept: draft.dept.trim() || "General", initials: initials(name), rows: [made] };
+        employees.push(employee);
+        pushLog({ employeeId: employee.id, employeeName: employee.name, rowId: made.id, rowLabel: `W${made.week} ${made.day}`, field: "Employee", from: "—", to: "Added" });
+        adding = false; selectedId = employee.id; editing = false; editingRowId = null; menuRowId = null;
+        scheduleSave(); render();
+      }
+    });
+
+    document.getElementById("app").addEventListener("input", (e) => {
+      const t = e.target;
+      if (t.id === "search") { query = t.value; render(); return; }
+      if (t.id === "pw") { password = t.value; passwordError = ""; render(); return; }
+      if (t.id === "add-name" || t.id === "add-role" || t.id === "add-dept") {
+        draft[t.id.slice(4)] = t.value; addError = ""; render(); return;
+      }
+      if (t.dataset.row) {
+        const value = t.dataset.kind === "num" ? Number(t.value) : t.value;
+        updateRow(t.dataset.row, { [t.dataset.field]: value });
+      }
+    });
+    document.getElementById("app").addEventListener("change", (e) => {
+      const t = e.target;
+      if (t.dataset && t.dataset.row && t.tagName === "SELECT") updateRow(t.dataset.row, { day: t.value });
+    });
+
+    render();
+  </script>
+</body>
+</html>
